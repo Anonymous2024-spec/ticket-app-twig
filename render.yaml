@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: ticket-app-twig
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
