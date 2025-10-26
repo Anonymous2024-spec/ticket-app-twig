@@ -1,4 +1,12 @@
 <?php
+// Handle PHP built-in server
+if (php_sapi_name() === 'cli-server') {
+    $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    if ($path !== '/' && file_exists(__DIR__ . $path)) {
+        return false; // Serve static files
+    }
+}
+
 require_once './vendor/autoload.php';
 require_once './src/Auth.php';
 require_once './src/TicketManager.php';
