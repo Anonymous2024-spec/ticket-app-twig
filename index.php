@@ -1,12 +1,12 @@
 <?php
-require_once '../vendor/autoload.php';
-require_once '../src/Auth.php';
-require_once '../src/TicketManager.php';
+require_once './vendor/autoload.php';
+require_once './src/Auth.php';
+require_once './src/TicketManager.php';
 
 session_start();
 
-// Setup Twig
-$loader = new \Twig\Loader\FilesystemLoader('../templates');
+// Setup Twig - FIXED PATH
+$loader = new \Twig\Loader\FilesystemLoader('./templates');
 $twig = new \Twig\Environment($loader);
 
 $auth = new TicketApp\Auth();
