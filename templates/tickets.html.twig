@@ -1,0 +1,610 @@
+{% extends "base.html.twig" %}
+
+{% block title %}Ticket Management - TicketFlow{% endblock %}
+
+{% block content %}
+<div class="tickets">
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div>
+                    <h1 class="title">Ticket Management</h1>
+                    <p class="subtitle">Create, view, and manage support tickets</p>
+                </div>
+                <div class="header-actions">
+                    <button 
+                        class="btn btn-primary"
+                        onclick="showCreateForm()"
+                        id="createBtn"
+                    >
+                        + Create Ticket
+                    </button>
+                    <a href="/dashboard" class="btn btn-secondary">Back to Dashboard</a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="container">
+        <div class="content">
+            <!-- Sidebar - Form -->
+            <div class="sidebar" id="formSidebar" style="display: none;">
+                <div class="form-section">
+                    <h2 class="form-title" id="formTitle">Create New Ticket</h2>
+                    <form method="POST" action="/tickets" onsubmit="return validateTicketForm(this)" id="ticketForm">
+                        <input type="hidden" name="action" id="formAction" value="create">
+                        <input type="hidden" name="id" id="ticketId">
+                        
+                        <div class="form-group">
+                            <label for="title">Title *</label>
+                            <input
+                                type="text"
+                                id="title"
+                                name="title"
+                                placeholder="Enter ticket title"
+                                required
+                            />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="description">Description</label>
+                            <textarea
+                                id="description"
+                                name="description"
+                                placeholder="Describe the issue or request..."
+                                rows="4"
+                                maxlength="500"
+                            ></textarea>
+                            <div class="char-count"><span id="charCount">0</span>/500 characters</div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="status">Status *</label>
+                                <select id="status" name="status" required>
+                                    <option value="">Select Status</option>
+                                    <option value="open">Open</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="closed">Closed</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="priority">Priority</label>
+                                <select id="priority" name="priority">
+                                    <option value="low">Low</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="high">High</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" onclick="hideForm()" class="cancel-button">
+                                Cancel
+                            </button>
+                            <button type="submit" class="submit-button">
+                                Create Ticket
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Main Area - Ticket List -->
+            <div class="main">
+                <!-- Filter Tabs -->
+                <div class="filter-tabs">
+                    <a href="/tickets?filter=all" class="filter-tab {{ filter == 'all' ? 'active' : '' }}">
+                        <span class="tab-label">All Tickets</span>
+                        <span class="tab-count">({{ stats.total }})</span>
+                    </a>
+                    <a href="/tickets?filter=open" class="filter-tab {{ filter == 'open' ? 'active' : '' }}">
+                        <span class="tab-label">Open</span>
+                        <span class="tab-count">({{ stats.open }})</span>
+                    </a>
+                    <a href="/tickets?filter=in_progress" class="filter-tab {{ filter == 'in_progress' ? 'active' : '' }}">
+                        <span class="tab-label">In Progress</span>
+                        <span class="tab-count">({{ stats.in_progress }})</span>
+                    </a>
+                    <a href="/tickets?filter=closed" class="filter-tab {{ filter == 'closed' ? 'active' : '' }}">
+                        <span class="tab-label">Resolved</span>
+                        <span class="tab-count">({{ stats.closed }})</span>
+                    </a>
+                </div>
+
+                <!-- Tickets Grid -->
+                {% if tickets is empty %}
+                <div class="empty-state">
+                    <div class="empty-icon">🎫</div>
+                    <h3>No tickets found</h3>
+                    <p>
+                        {% if filter == 'all' %}
+                        You haven't created any tickets yet.
+                        {% else %}
+                        No {{ filter|replace({'_': ' '}) }} tickets found.
+                        {% endif %}
+                    </p>
+                    {% if filter == 'all' %}
+                    <button class="btn btn-primary" onclick="showCreateForm()">
+                        Create Your First Ticket
+                    </button>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="tickets-grid">
+                    {% for ticket in tickets %}
+                    <div class="ticket-card">
+                        <div class="card-header">
+                            <div class="title-section">
+                                <h3 class="title">{{ ticket.title }}</h3>
+                                <span class="priority">
+                                    {% if ticket.priority == 'high' %}🔴
+                                    {% elseif ticket.priority == 'medium' %}🟡
+                                    {% else %}🟢{% endif %}
+                                    {{ ticket.priority }}
+                                </span>
+                            </div>
+                            <span class="status-tag status-{{ ticket.status }}">
+                                {{ ticket.status|replace({'_': ' '}) }}
+                            </span>
+                        </div>
+
+                        <div class="card-body">
+                            <p class="description">
+                                {{ ticket.description ?: 'No description provided' }}
+                            </p>
+                        </div>
+
+                        <div class="card-footer">
+                            <div class="dates">
+                                <span class="date">Created: {{ ticket.createdAt|date('M j, Y') }}</span>
+                                {% if ticket.updatedAt != ticket.createdAt %}
+                                <span class="date">Updated: {{ ticket.updatedAt|date('M j, Y') }}</span>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="actions">
+                                <button class="edit-button" onclick="editTicket({{ ticket|json_encode }})" title="Edit ticket">
+                                    ✏️
+                                </button>
+                                <form method="POST" action="/tickets" onsubmit="return confirmDelete()" style="display: inline;">
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="id" value="{{ ticket.id }}">
+                                    <button type="submit" class="delete-button" title="Delete ticket">
+                                        🗑️
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.tickets {
+    min-height: 100vh;
+    background: #f8fafc;
+}
+
+/* Header */
+.header {
+    background: white;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 2rem 0;
+    margin-bottom: 3rem;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+}
+
+.title {
+    font-size: 2.5rem;
+    color: #1e293b;
+    margin-bottom: 0.5rem;
+}
+
+.subtitle {
+    color: #64748b;
+    font-size: 1.1rem;
+}
+
+.header-actions {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+/* Main Content Layout */
+.content {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 3rem;
+}
+
+@media (min-width: 1024px) {
+    .content {
+        grid-template-columns: 400px 1fr;
+    }
+}
+
+/* Sidebar Form */
+.sidebar {
+    order: 2;
+}
+
+@media (min-width: 1024px) {
+    .sidebar {
+        order: 1;
+    }
+}
+
+.form-section {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    position: sticky;
+    top: 2rem;
+}
+
+.form-title {
+    font-size: 1.5rem;
+    color: #1e293b;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 2px solid #f1f5f9;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.char-count {
+    font-size: 0.75rem;
+    color: #6b7280;
+    text-align: right;
+    margin-top: 4px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+.cancel-button {
+    flex: 1;
+    padding: 12px 24px;
+    border: 2px solid #d1d5db;
+    border-radius: 8px;
+    background: transparent;
+    color: #6b7280;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.cancel-button:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+.submit-button {
+    flex: 2;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    background: var(--primary-color);
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.submit-button:hover {
+    background: var(--secondary-color);
+    transform: translateY(-1px);
+}
+
+/* Main Content Area */
+.main {
+    order: 1;
+}
+
+@media (min-width: 1024px) {
+    .main {
+        order: 2;
+    }
+}
+
+/* Filter Tabs */
+.filter-tabs {
+    display: flex;
+    background: white;
+    padding: 1rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.filter-tab {
+    flex: 1;
+    min-width: 120px;
+    padding: 1rem 1.5rem;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #64748b;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    text-decoration: none;
+}
+
+.filter-tab:hover {
+    background: #f8fafc;
+    color: #374151;
+    text-decoration: none;
+}
+
+.filter-tab.active {
+    background: var(--primary-color);
+    color: white;
+    text-decoration: none;
+}
+
+.tab-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.tab-count {
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+
+/* Tickets Grid */
+.tickets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 2rem;
+}
+
+.ticket-card {
+    background: white;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    border-left: 4px solid var(--primary-color);
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    height: fit-content;
+}
+
+.ticket-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+    gap: 1rem;
+}
+
+.title-section {
+    flex: 1;
+}
+
+.title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.5rem;
+    line-height: 1.4;
+}
+
+.priority {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.card-body {
+    flex: 1;
+    margin-bottom: 1.5rem;
+}
+
+.description {
+    color: #64748b;
+    line-height: 1.5;
+    font-size: 0.9rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1rem;
+}
+
+.dates {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+}
+
+.date {
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+.actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.edit-button,
+.delete-button {
+    padding: 8px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+    background: transparent;
+}
+
+.edit-button:hover {
+    background: #dbeafe;
+    transform: scale(1.1);
+}
+
+.delete-button:hover {
+    background: #fee2e2;
+    transform: scale(1.1);
+}
+
+/* Empty State */
+.empty-state {
+    background: white;
+    padding: 3rem;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.empty-icon {
+    font-size: 4rem;
+    margin-bottom: 1.5rem;
+}
+
+.empty-state h3 {
+    font-size: 1.5rem;
+    color: #1e293b;
+    margin-bottom: 1rem;
+}
+
+.empty-state p {
+    color: #64748b;
+    margin-bottom: 2rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .header-content {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .header-actions {
+        justify-content: center;
+    }
+    
+    .filter-tabs {
+        flex-direction: column;
+    }
+    
+    .tickets-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .form-section {
+        position: static;
+        margin-bottom: 2rem;
+    }
+    
+    .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .card-footer {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .actions {
+        align-self: flex-end;
+    }
+}
+</style>
+
+<script>
+function showCreateForm() {
+    document.getElementById('formSidebar').style.display = 'block';
+    document.getElementById('formTitle').textContent = 'Create New Ticket';
+    document.getElementById('formAction').value = 'create';
+    document.getElementById('ticketId').value = '';
+    document.getElementById('ticketForm').reset();
+    document.getElementById('createBtn').disabled = true;
+    updateCharCount();
+}
+
+function hideForm() {
+    document.getElementById('formSidebar').style.display = 'none';
+    document.getElementById('createBtn').disabled = false;
+}
+
+function editTicket(ticket) {
+    document.getElementById('formSidebar').style.display = 'block';
+    document.getElementById('formTitle').textContent = 'Edit Ticket';
+    document.getElementById('formAction').value = 'update';
+    document.getElementById('ticketId').value = ticket.id;
+    document.getElementById('title').value = ticket.title;
+    document.getElementById('description').value = ticket.description || '';
+    document.getElementById('status').value = ticket.status;
+    document.getElementById('priority').value = ticket.priority;
+    document.getElementById('createBtn').disabled = true;
+    updateCharCount();
+}
+
+function updateCharCount() {
+    const description = document.getElementById('description');
+    const charCount = document.getElementById('charCount');
+    if (description && charCount) {
+        charCount.textContent = description.value.length;
+        description.addEventListener('input', function() {
+            charCount.textContent = this.value.length;
+        });
+    }
+}
+
+// Initialize character count
+document.addEventListener('DOMContentLoaded', function() {
+    updateCharCount();
+});
+</script>
+{% endblock %}
